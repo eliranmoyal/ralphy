@@ -8,7 +8,12 @@ export * from "./jira.ts";
 export * from "./cached-task-source.ts";
 
 import { GitHubTaskSource } from "./github.ts";
-import { type JiraConfig, JiraTaskSource, JiraTicketTaskSource } from "./jira.ts";
+import {
+	type JiraConfig,
+	JiraSubtasksTaskSource,
+	JiraTaskSource,
+	JiraTicketTaskSource,
+} from "./jira.ts";
 import { JsonTaskSource } from "./json.ts";
 import { MarkdownFolderTaskSource } from "./markdown-folder.ts";
 import { MarkdownTaskSource } from "./markdown.ts";
@@ -27,6 +32,8 @@ interface TaskSourceOptions {
 	jiraProject?: string;
 	/** Specific Jira ticket key */
 	jiraTicket?: string;
+	/** When true with jiraTicket, run subtasks of the parent instead of the ticket itself */
+	jiraSubtasks?: boolean;
 	/** Jira config from .ralphy/config.yaml */
 	jiraConfig?: JiraConfig;
 }
@@ -68,6 +75,9 @@ export function createTaskSource(options: TaskSourceOptions): TaskSource {
 
 		case "jira":
 			if (options.jiraTicket) {
+				if (options.jiraSubtasks) {
+					return new JiraSubtasksTaskSource(options.jiraTicket, options.jiraConfig);
+				}
 				return new JiraTicketTaskSource(options.jiraTicket, options.jiraConfig);
 			}
 			if (!options.jiraProject) {

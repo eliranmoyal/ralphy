@@ -182,9 +182,10 @@ ralphy --github owner/repo --github-label "ready"
 ralphy --jira PROJ                           # fetch "In Progress" issues from project
 ralphy --jira PROJ --jira-label "ready"       # filter by label
 ralphy --jira-ticket PROJ-123                 # run a specific ticket
+ralphy --jira-ticket PROJ-123 --jira-subtasks # run all subtasks of the parent
 ```
 
-Requires `JIRA_HOST`, `JIRA_EMAIL`, and `JIRA_TOKEN` (Atlassian API token) environment variables. Config can override host/email via `.ralphy/config.yaml`. Fetches description and comments; transitions to "Done" on completion (or custom `toTransition` from config).
+Requires `JIRA_HOST`, `JIRA_EMAIL`, and `JIRA_TOKEN` (Atlassian API token) environment variables. Config can override host/email via `.ralphy/config.yaml`. Fetches description and comments; transitions to "Done" on completion (or custom `toTransition` from config). With `--jira-subtasks`, loops through incomplete subtasks of the parent.
 
 ## Parallel Execution
 
@@ -319,6 +320,7 @@ ralphy --parallel --sandbox
 | `--jira PROJECT` | fetch tasks from Jira project (e.g., PROJ) |
 | `--jira-label TAG` | filter Jira issues by label |
 | `--jira-ticket KEY` | run a specific Jira ticket (e.g., PROJ-123) |
+| `--jira-subtasks` | with --jira-ticket: run subtasks of the parent instead |
 | `--sync-issue N` | sync PRD progress to GitHub issue #N |
 | `--model NAME` | override model for any engine |
 | `--sonnet` | shortcut for `--claude --model sonnet` |

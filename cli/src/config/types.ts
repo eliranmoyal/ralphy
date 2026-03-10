@@ -124,6 +124,8 @@ export interface RuntimeOptions {
 	jiraLabel: string;
 	/** Specific Jira ticket key (e.g., PROJ-123) */
 	jiraTicket: string;
+	/** With jiraTicket: run subtasks of parent instead of the ticket itself */
+	jiraSubtasks: boolean;
 	/** Auto-commit changes */
 	autoCommit: boolean;
 	/** Browser automation mode: 'auto' | 'true' | 'false' */
@@ -166,6 +168,7 @@ export const DEFAULT_OPTIONS: RuntimeOptions = {
 	jiraProject: "",
 	jiraLabel: "",
 	jiraTicket: "",
+	jiraSubtasks: false,
 	autoCommit: true,
 	browserEnabled: "auto",
 };

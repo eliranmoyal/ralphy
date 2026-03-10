@@ -78,6 +78,7 @@ export async function runLoop(options: RuntimeOptions): Promise<void> {
 		label: options.prdSource === "jira" ? options.jiraLabel : options.githubLabel,
 		jiraProject: options.jiraProject,
 		jiraTicket: options.jiraTicket,
+		jiraSubtasks: options.jiraSubtasks,
 		jiraConfig: config?.jira
 			? {
 					host: config.jira.host || undefined,

@@ -737,6 +737,7 @@ ${BOLD}PRD SOURCE OPTIONS:${RESET}
   --jira PROJECT      Fetch "In Progress" tasks from Jira project (e.g., PROJ)
   --jira-label TAG    Filter Jira issues by label
   --jira-ticket KEY   Run a specific Jira ticket (e.g., PROJ-123)
+  --jira-subtasks    With --jira-ticket: run subtasks of the parent instead
 
 ${BOLD}CAPABILITIES:${RESET}
   --browser           Enable browser automation (requires agent-browser)

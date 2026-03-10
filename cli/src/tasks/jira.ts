@@ -232,6 +232,149 @@ export class JiraTaskSource implements TaskSource {
 }
 
 /**
+ * Jira subtasks task source - runs all subtasks of a parent ticket
+ */
+export class JiraSubtasksTaskSource implements TaskSource {
+	type = "jira" as const;
+	private host: string;
+	private auth: string;
+	private parentKey: string;
+	private toTransition: string;
+	private toStatus: string;
+	private cache: Task[] | null = null;
+
+	constructor(parentKey: string, config?: JiraConfig) {
+		const host = process.env.JIRA_HOST || config?.host;
+		const email = process.env.JIRA_EMAIL || config?.email;
+		const token = process.env.JIRA_TOKEN;
+
+		if (!host) {
+			throw new Error(
+				"Jira host is required. Set JIRA_HOST env var or add jira.host to .ralphy/config.yaml",
+			);
+		}
+		if (!email) {
+			throw new Error(
+				"Jira email is required. Set JIRA_EMAIL env var or add jira.email to .ralphy/config.yaml",
+			);
+		}
+		if (!token) {
+			throw new Error("JIRA_TOKEN environment variable is required (Atlassian API token)");
+		}
+
+		this.host = host.replace(/\/$/, "");
+		this.auth = Buffer.from(`${email}:${token}`).toString("base64");
+		this.parentKey = parentKey.toUpperCase();
+		this.toTransition = config?.toTransition ?? "Done";
+		this.toStatus = config?.toStatus ?? this.toTransition;
+	}
+
+	private get baseUrl(): string {
+		return `https://${this.host}/rest/api/3`;
+	}
+
+	private get headers(): Record<string, string> {
+		return {
+			Authorization: `Basic ${this.auth}`,
+			Accept: "application/json",
+			"Content-Type": "application/json",
+		};
+	}
+
+	private async request<T>(path: string, options?: RequestInit): Promise<T> {
+		const url = `${this.baseUrl}${path}`;
+		const res = await fetch(url, {
+			...options,
+			headers: { ...this.headers, ...options?.headers },
+		});
+
+		if (!res.ok) {
+			const body = await res.text();
+			throw new Error(`Jira API error (${res.status}): ${body}`);
+		}
+
+		if (res.status === 204) {
+			return {} as T;
+		}
+
+		return res.json() as Promise<T>;
+	}
+
+	private async fetchSubtasks(): Promise<Task[]> {
+		if (this.cache) return this.cache;
+
+		const jql = `parent = "${this.parentKey}" AND status != "${this.toStatus}" ORDER BY created ASC`;
+		const data = await this.request<JiraSearchResponse>(
+			`/search?jql=${encodeURIComponent(jql)}&fields=summary,description,status,comment`,
+		);
+
+		const tasks = data.issues.map((issue) => ({
+			id: `${issue.key}:${issue.fields.summary}`,
+			title: `[${issue.key}] ${issue.fields.summary}`,
+			body: buildTaskBody(issue.fields.description, issue.fields.comment),
+			completed: false,
+		}));
+
+		this.cache = tasks;
+		return tasks;
+	}
+
+	async getAllTasks(): Promise<Task[]> {
+		return await this.fetchSubtasks();
+	}
+
+	async getNextTask(): Promise<Task | null> {
+		const tasks = await this.fetchSubtasks();
+		return tasks[0] ?? null;
+	}
+
+	async markComplete(id: string): Promise<void> {
+		const issueKey = id.split(":")[0];
+		if (!issueKey) {
+			throw new Error(`Invalid Jira issue ID: ${id}`);
+		}
+
+		const transitions = await this.request<JiraTransitionsResponse>(
+			`/issue/${issueKey}/transitions`,
+		);
+
+		const targetTransition = transitions.transitions.find(
+			(t) => t.name.toLowerCase() === this.toTransition.toLowerCase(),
+		);
+
+		if (!targetTransition) {
+			throw new Error(
+				`No "${this.toTransition}" transition found for ${issueKey}. Available: ${transitions.transitions.map((t) => t.name).join(", ")}`,
+			);
+		}
+
+		await this.request(`/issue/${issueKey}/transitions`, {
+			method: "POST",
+			body: JSON.stringify({ transition: { id: targetTransition.id } }),
+		});
+
+		this.invalidateCache();
+	}
+
+	async countRemaining(): Promise<number> {
+		const tasks = await this.fetchSubtasks();
+		return tasks.length;
+	}
+
+	async countCompleted(): Promise<number> {
+		const jql = `parent = "${this.parentKey}" AND status = "${this.toStatus}"`;
+		const data = await this.request<JiraSearchResponse>(
+			`/search?jql=${encodeURIComponent(jql)}&fields=summary&maxResults=0`,
+		);
+		return data.total;
+	}
+
+	private invalidateCache(): void {
+		this.cache = null;
+	}
+}
+
+/**
  * Single-ticket Jira task source - runs one specific Jira ticket
  */
 export class JiraTicketTaskSource implements TaskSource {

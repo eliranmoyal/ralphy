@@ -53,6 +53,7 @@ export function createProgram(): Command {
 		.option("--jira <project>", "Jira project key for issues (e.g., PROJ)")
 		.option("--jira-label <label>", "Filter Jira issues by label")
 		.option("--jira-ticket <key>", "Run a specific Jira ticket (e.g., PROJ-123)")
+		.option("--jira-subtasks", "With --jira-ticket: run subtasks of the parent instead of the ticket itself")
 		.option("--no-commit", "Don't auto-commit changes")
 		.option("--browser", "Enable browser automation (agent-browser)")
 		.option("--no-browser", "Disable browser automation")
@@ -162,6 +163,7 @@ export function parseArgs(args: string[]): {
 		jiraProject: opts.jira || "",
 		jiraLabel: opts.jiraLabel || "",
 		jiraTicket: opts.jiraTicket || "",
+		jiraSubtasks: opts.jiraSubtasks || false,
 		syncIssue: opts.syncIssue ? Number.parseInt(opts.syncIssue, 10) || undefined : undefined,
 		autoCommit: opts.commit !== false,
 		browserEnabled: opts.browser === true ? "true" : opts.browser === false ? "false" : "auto",
