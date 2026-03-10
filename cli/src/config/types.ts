@@ -40,6 +40,14 @@ export const BoundariesSchema = z.object({
 });
 
 /**
+ * Jira configuration schema
+ */
+export const JiraSchema = z.object({
+	host: z.string().default(""),
+	email: z.string().default(""),
+});
+
+/**
  * Full Ralphy config schema
  */
 export const RalphyConfigSchema = z.object({
@@ -52,6 +60,7 @@ export const RalphyConfigSchema = z.object({
 		.default([]),
 	boundaries: BoundariesSchema.default({}),
 	notifications: NotificationsSchema.default({}),
+	jira: JiraSchema.default({}),
 });
 
 /**
@@ -92,7 +101,7 @@ export interface RuntimeOptions {
 	/** Maximum parallel agents */
 	maxParallel: number;
 	/** PRD source type */
-	prdSource: "markdown" | "markdown-folder" | "yaml" | "json" | "github";
+	prdSource: "markdown" | "markdown-folder" | "yaml" | "json" | "github" | "jira";
 	/** PRD file or folder path */
 	prdFile: string;
 	/** Whether PRD path is a folder */
@@ -103,6 +112,12 @@ export interface RuntimeOptions {
 	githubLabel: string;
 	/** GitHub issue number to sync PRD with on each iteration */
 	syncIssue?: number;
+	/** Jira project key */
+	jiraProject: string;
+	/** Jira issue label filter */
+	jiraLabel: string;
+	/** Specific Jira ticket key (e.g., PROJ-123) */
+	jiraTicket: string;
 	/** Auto-commit changes */
 	autoCommit: boolean;
 	/** Browser automation mode: 'auto' | 'true' | 'false' */
@@ -115,6 +130,8 @@ export interface RuntimeOptions {
 	useSandbox?: boolean;
 	/** Additional arguments to pass to the engine CLI */
 	engineArgs?: string[];
+	/** Save prompts and AI responses to .ralphy/logs/ */
+	log?: boolean;
 }
 
 /**
@@ -140,6 +157,9 @@ export const DEFAULT_OPTIONS: RuntimeOptions = {
 	prdIsFolder: false,
 	githubRepo: "",
 	githubLabel: "",
+	jiraProject: "",
+	jiraLabel: "",
+	jiraTicket: "",
 	autoCommit: true,
 	browserEnabled: "auto",
 };

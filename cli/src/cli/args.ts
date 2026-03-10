@@ -50,12 +50,16 @@ export function createProgram(): Command {
 		.option("--github <repo>", "GitHub repo for issues (owner/repo)")
 		.option("--github-label <label>", "Filter GitHub issues by label")
 		.option("--sync-issue <number>", "Sync PRD file to GitHub issue body on each iteration")
+		.option("--jira <project>", "Jira project key for issues (e.g., PROJ)")
+		.option("--jira-label <label>", "Filter Jira issues by label")
+		.option("--jira-ticket <key>", "Run a specific Jira ticket (e.g., PROJ-123)")
 		.option("--no-commit", "Don't auto-commit changes")
 		.option("--browser", "Enable browser automation (agent-browser)")
 		.option("--no-browser", "Disable browser automation")
 		.option("--model <name>", "Override default model for the engine")
 		.option("--sonnet", "Shortcut for --claude --model sonnet")
 		.option("--no-merge", "Skip automatic branch merging after parallel execution")
+		.option("--log", "Save prompts and AI responses to .ralphy/logs/")
 		.option("-v, --verbose", "Verbose output")
 		.allowUnknownOption();
 
@@ -103,7 +107,8 @@ export function parseArgs(args: string[]): {
 	const modelOverride = opts.sonnet ? "sonnet" : opts.model || undefined;
 
 	// Determine PRD source with auto-detection for file vs folder
-	let prdSource: "markdown" | "markdown-folder" | "yaml" | "json" | "github" = "markdown";
+	let prdSource: "markdown" | "markdown-folder" | "yaml" | "json" | "github" | "jira" =
+		"markdown";
 	let prdFile = opts.prd || "PRD.md";
 	let prdIsFolder = false;
 
@@ -115,6 +120,8 @@ export function parseArgs(args: string[]): {
 		prdFile = opts.yaml;
 	} else if (opts.github) {
 		prdSource = "github";
+	} else if (opts.jira || opts.jiraTicket) {
+		prdSource = "jira";
 	} else {
 		// Auto-detect if PRD path is a file or folder
 		if (existsSync(prdFile)) {
@@ -152,6 +159,9 @@ export function parseArgs(args: string[]): {
 		prdIsFolder,
 		githubRepo: opts.github || "",
 		githubLabel: opts.githubLabel || "",
+		jiraProject: opts.jira || "",
+		jiraLabel: opts.jiraLabel || "",
+		jiraTicket: opts.jiraTicket || "",
 		syncIssue: opts.syncIssue ? Number.parseInt(opts.syncIssue, 10) || undefined : undefined,
 		autoCommit: opts.commit !== false,
 		browserEnabled: opts.browser === true ? "true" : opts.browser === false ? "false" : "auto",
@@ -159,6 +169,7 @@ export function parseArgs(args: string[]): {
 		skipMerge: opts.merge === false,
 		useSandbox: opts.sandbox || false,
 		engineArgs,
+		log: opts.log || false,
 	};
 
 	return {

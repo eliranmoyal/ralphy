@@ -55,6 +55,11 @@ export async function runLoop(options: RuntimeOptions): Promise<void> {
 		process.exit(1);
 	}
 
+	if (options.prdSource === "jira" && !options.jiraProject && !options.jiraTicket) {
+		logError("Jira project or ticket not specified. Use --jira PROJECT or --jira-ticket PROJ-123");
+		process.exit(1);
+	}
+
 	// Check engine availability
 	const engine = createEngine(options.aiEngine as AIEngineName);
 	const available = await isEngineAvailable(options.aiEngine as AIEngineName);
@@ -70,7 +75,12 @@ export async function runLoop(options: RuntimeOptions): Promise<void> {
 		type: options.prdSource,
 		filePath: options.prdFile,
 		repo: options.githubRepo,
-		label: options.githubLabel,
+		label: options.prdSource === "jira" ? options.jiraLabel : options.githubLabel,
+		jiraProject: options.jiraProject,
+		jiraTicket: options.jiraTicket,
+		jiraConfig: config?.jira
+			? { host: config.jira.host || undefined, email: config.jira.email || undefined }
+			: undefined,
 	});
 	const taskSource = new CachedTaskSource(innerTaskSource);
 
@@ -139,6 +149,7 @@ export async function runLoop(options: RuntimeOptions): Promise<void> {
 			skipMerge: options.skipMerge,
 			engineArgs: options.engineArgs,
 			syncIssue: options.syncIssue,
+			log: options.log,
 		});
 	} else {
 		result = await runSequential({
@@ -163,6 +174,7 @@ export async function runLoop(options: RuntimeOptions): Promise<void> {
 			skipMerge: options.skipMerge,
 			engineArgs: options.engineArgs,
 			syncIssue: options.syncIssue,
+			log: options.log,
 		});
 	}
 

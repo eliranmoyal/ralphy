@@ -734,6 +734,9 @@ ${BOLD}PRD SOURCE OPTIONS:${RESET}
   --github REPO       Fetch tasks from GitHub issues (e.g., owner/repo)
   --github-label TAG  Filter GitHub issues by label
   --sync-issue NUM    Sync PRD file to GitHub issue body on each iteration
+  --jira PROJECT      Fetch "In Progress" tasks from Jira project (e.g., PROJ)
+  --jira-label TAG    Filter Jira issues by label
+  --jira-ticket KEY   Run a specific Jira ticket (e.g., PROJ-123)
 
 ${BOLD}CAPABILITIES:${RESET}
   --browser           Enable browser automation (requires agent-browser)

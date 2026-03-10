@@ -1,0 +1,396 @@
+import type { Task, TaskSource } from "./types.ts";
+
+/**
+ * Cached Jira issues data
+ */
+interface JiraCache {
+	issues: Task[];
+	doneCount: number;
+	lastFetched: number;
+}
+
+/** Cache TTL in milliseconds (30 seconds) */
+const CACHE_TTL_MS = 30_000;
+
+export interface JiraConfig {
+	host?: string;
+	email?: string;
+}
+
+/**
+ * Jira Cloud REST API task source - reads tasks from Jira issues
+ *
+ * Authentication (env vars override config):
+ * - JIRA_HOST or config.jira.host: Jira Cloud host (e.g., mycompany.atlassian.net)
+ * - JIRA_EMAIL or config.jira.email: Atlassian account email
+ * - JIRA_TOKEN: Atlassian API token (env var only, never stored in config)
+ *
+ * Fetches "In Progress" issues by default, moves them to "Done" on completion.
+ */
+export class JiraTaskSource implements TaskSource {
+	type = "jira" as const;
+	private host: string;
+	private auth: string;
+	private project: string;
+	private label?: string;
+	private cache: JiraCache | null = null;
+
+	constructor(project: string, label?: string, config?: JiraConfig) {
+		const host = process.env.JIRA_HOST || config?.host;
+		const email = process.env.JIRA_EMAIL || config?.email;
+		const token = process.env.JIRA_TOKEN;
+
+		if (!host) {
+			throw new Error(
+				"Jira host is required. Set JIRA_HOST env var or add jira.host to .ralphy/config.yaml",
+			);
+		}
+		if (!email) {
+			throw new Error(
+				"Jira email is required. Set JIRA_EMAIL env var or add jira.email to .ralphy/config.yaml",
+			);
+		}
+		if (!token) {
+			throw new Error("JIRA_TOKEN environment variable is required (Atlassian API token)");
+		}
+
+		this.host = host.replace(/\/$/, "");
+		this.auth = Buffer.from(`${email}:${token}`).toString("base64");
+		this.project = project;
+		this.label = label;
+	}
+
+	private get baseUrl(): string {
+		return `https://${this.host}/rest/api/3`;
+	}
+
+	private get headers(): Record<string, string> {
+		return {
+			Authorization: `Basic ${this.auth}`,
+			Accept: "application/json",
+			"Content-Type": "application/json",
+		};
+	}
+
+	/**
+	 * Make an authenticated request to the Jira API
+	 */
+	private async request<T>(path: string, options?: RequestInit): Promise<T> {
+		const url = `${this.baseUrl}${path}`;
+		const res = await fetch(url, {
+			...options,
+			headers: { ...this.headers, ...options?.headers },
+		});
+
+		if (!res.ok) {
+			const body = await res.text();
+			throw new Error(`Jira API error (${res.status}): ${body}`);
+		}
+
+		return res.json() as Promise<T>;
+	}
+
+	private isCacheValid(): boolean {
+		if (!this.cache) return false;
+		return Date.now() - this.cache.lastFetched < CACHE_TTL_MS;
+	}
+
+	private invalidateCache(): void {
+		this.cache = null;
+	}
+
+	/**
+	 * Build JQL query for fetching in-progress issues
+	 */
+	private buildJql(): string {
+		const parts = [`project = "${this.project}"`, `status = "In Progress"`];
+		if (this.label) {
+			parts.push(`labels = "${this.label}"`);
+		}
+		parts.push("ORDER BY created ASC");
+		return parts.join(" AND ");
+	}
+
+	/**
+	 * Fetch and cache in-progress issues
+	 */
+	private async fetchIssues(): Promise<Task[]> {
+		if (this.isCacheValid() && this.cache) {
+			return this.cache.issues;
+		}
+
+		const jql = this.buildJql();
+		const data = await this.request<JiraSearchResponse>(
+			`/search?jql=${encodeURIComponent(jql)}&fields=summary,description,status`,
+		);
+
+		const tasks = data.issues.map((issue) => ({
+			id: `${issue.key}:${issue.fields.summary}`,
+			title: `[${issue.key}] ${issue.fields.summary}`,
+			body: extractDescription(issue.fields.description),
+			completed: false,
+		}));
+
+		this.cache = {
+			issues: tasks,
+			doneCount: this.cache?.doneCount ?? -1,
+			lastFetched: Date.now(),
+		};
+
+		return tasks;
+	}
+
+	async getAllTasks(): Promise<Task[]> {
+		return await this.fetchIssues();
+	}
+
+	async getNextTask(): Promise<Task | null> {
+		const tasks = await this.fetchIssues();
+		return tasks[0] || null;
+	}
+
+	async markComplete(id: string): Promise<void> {
+		const issueKey = id.split(":")[0];
+		if (!issueKey) {
+			throw new Error(`Invalid Jira issue ID: ${id}`);
+		}
+
+		// Find the "Done" transition
+		const transitions = await this.request<JiraTransitionsResponse>(
+			`/issue/${issueKey}/transitions`,
+		);
+
+		const doneTransition = transitions.transitions.find(
+			(t) => t.name.toLowerCase() === "done",
+		);
+
+		if (!doneTransition) {
+			throw new Error(
+				`No "Done" transition found for ${issueKey}. Available: ${transitions.transitions.map((t) => t.name).join(", ")}`,
+			);
+		}
+
+		await this.request(`/issue/${issueKey}/transitions`, {
+			method: "POST",
+			body: JSON.stringify({ transition: { id: doneTransition.id } }),
+		});
+
+		this.invalidateCache();
+	}
+
+	async countRemaining(): Promise<number> {
+		const tasks = await this.fetchIssues();
+		return tasks.length;
+	}
+
+	async countCompleted(): Promise<number> {
+		if (this.isCacheValid() && this.cache && this.cache.doneCount >= 0) {
+			return this.cache.doneCount;
+		}
+
+		const jql = `project = "${this.project}" AND status = "Done"${this.label ? ` AND labels = "${this.label}"` : ""} ORDER BY created ASC`;
+		const data = await this.request<JiraSearchResponse>(
+			`/search?jql=${encodeURIComponent(jql)}&fields=summary&maxResults=0`,
+		);
+
+		const doneCount = data.total;
+		if (this.cache) {
+			this.cache.doneCount = doneCount;
+		}
+
+		return doneCount;
+	}
+
+	/**
+	 * Get full issue description for a task
+	 */
+	async getIssueBody(id: string): Promise<string> {
+		const issueKey = id.split(":")[0];
+		if (!issueKey) return "";
+
+		const issue = await this.request<JiraIssue>(`/issue/${issueKey}?fields=description`);
+		return extractDescription(issue.fields.description);
+	}
+}
+
+/**
+ * Single-ticket Jira task source - runs one specific Jira ticket
+ */
+export class JiraTicketTaskSource implements TaskSource {
+	type = "jira" as const;
+	private host: string;
+	private auth: string;
+	private ticketKey: string;
+	private completed = false;
+
+	constructor(ticketKey: string, config?: JiraConfig) {
+		const host = process.env.JIRA_HOST || config?.host;
+		const email = process.env.JIRA_EMAIL || config?.email;
+		const token = process.env.JIRA_TOKEN;
+
+		if (!host) {
+			throw new Error(
+				"Jira host is required. Set JIRA_HOST env var or add jira.host to .ralphy/config.yaml",
+			);
+		}
+		if (!email) {
+			throw new Error(
+				"Jira email is required. Set JIRA_EMAIL env var or add jira.email to .ralphy/config.yaml",
+			);
+		}
+		if (!token) {
+			throw new Error("JIRA_TOKEN environment variable is required (Atlassian API token)");
+		}
+
+		this.host = host.replace(/\/$/, "");
+		this.auth = Buffer.from(`${email}:${token}`).toString("base64");
+		this.ticketKey = ticketKey.toUpperCase();
+	}
+
+	private get baseUrl(): string {
+		return `https://${this.host}/rest/api/3`;
+	}
+
+	private get headers(): Record<string, string> {
+		return {
+			Authorization: `Basic ${this.auth}`,
+			Accept: "application/json",
+			"Content-Type": "application/json",
+		};
+	}
+
+	private async request<T>(path: string, options?: RequestInit): Promise<T> {
+		const url = `${this.baseUrl}${path}`;
+		const res = await fetch(url, {
+			...options,
+			headers: { ...this.headers, ...options?.headers },
+		});
+
+		if (!res.ok) {
+			const body = await res.text();
+			throw new Error(`Jira API error (${res.status}): ${body}`);
+		}
+
+		return res.json() as Promise<T>;
+	}
+
+	async getAllTasks(): Promise<Task[]> {
+		if (this.completed) return [];
+
+		const issue = await this.request<JiraIssue>(
+			`/issue/${this.ticketKey}?fields=summary,description`,
+		);
+
+		return [
+			{
+				id: `${issue.key}:${issue.fields.summary}`,
+				title: `[${issue.key}] ${issue.fields.summary}`,
+				body: extractDescription(issue.fields.description),
+				completed: false,
+			},
+		];
+	}
+
+	async getNextTask(): Promise<Task | null> {
+		const tasks = await this.getAllTasks();
+		return tasks[0] || null;
+	}
+
+	async markComplete(id: string): Promise<void> {
+		const issueKey = id.split(":")[0];
+		if (!issueKey) {
+			throw new Error(`Invalid Jira issue ID: ${id}`);
+		}
+
+		// Transition to "Done"
+		const transitions = await this.request<JiraTransitionsResponse>(
+			`/issue/${issueKey}/transitions`,
+		);
+
+		const doneTransition = transitions.transitions.find(
+			(t) => t.name.toLowerCase() === "done",
+		);
+
+		if (!doneTransition) {
+			throw new Error(
+				`No "Done" transition found for ${issueKey}. Available: ${transitions.transitions.map((t) => t.name).join(", ")}`,
+			);
+		}
+
+		await this.request(`/issue/${issueKey}/transitions`, {
+			method: "POST",
+			body: JSON.stringify({ transition: { id: doneTransition.id } }),
+		});
+
+		this.completed = true;
+	}
+
+	async countRemaining(): Promise<number> {
+		return this.completed ? 0 : 1;
+	}
+
+	async countCompleted(): Promise<number> {
+		return this.completed ? 1 : 0;
+	}
+}
+
+// --- Jira API types ---
+
+interface JiraSearchResponse {
+	total: number;
+	issues: JiraIssue[];
+}
+
+interface JiraIssue {
+	key: string;
+	fields: {
+		summary: string;
+		description: JiraDocument | null;
+		status?: { name: string };
+	};
+}
+
+interface JiraDocument {
+	type: string;
+	content?: JiraDocumentNode[];
+}
+
+interface JiraDocumentNode {
+	type: string;
+	text?: string;
+	content?: JiraDocumentNode[];
+}
+
+interface JiraTransitionsResponse {
+	transitions: JiraTransition[];
+}
+
+interface JiraTransition {
+	id: string;
+	name: string;
+}
+
+/**
+ * Extract plain text from Jira's Atlassian Document Format (ADF)
+ */
+function extractDescription(doc: JiraDocument | null): string {
+	if (!doc || !doc.content) return "";
+
+	function extractText(nodes: JiraDocumentNode[]): string {
+		return nodes
+			.map((node) => {
+				if (node.text) return node.text;
+				if (node.content) return extractText(node.content);
+				return "";
+			})
+			.join("");
+	}
+
+	return doc.content
+		.map((block) => {
+			if (block.content) return extractText(block.content);
+			return "";
+		})
+		.filter(Boolean)
+		.join("\n");
+}
