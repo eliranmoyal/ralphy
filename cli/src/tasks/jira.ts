@@ -99,6 +99,11 @@ export class JiraTaskSource implements TaskSource {
 			throw new Error(`Jira API error (${res.status}): ${body}`);
 		}
 
+		// 204 No Content (e.g. transitions POST) has no body
+		if (res.status === 204) {
+			return {} as T;
+		}
+
 		return res.json() as Promise<T>;
 	}
 
@@ -284,6 +289,11 @@ export class JiraTicketTaskSource implements TaskSource {
 		if (!res.ok) {
 			const body = await res.text();
 			throw new Error(`Jira API error (${res.status}): ${body}`);
+		}
+
+		// 204 No Content (e.g. transitions POST) has no body
+		if (res.status === 204) {
+			return {} as T;
 		}
 
 		return res.json() as Promise<T>;
