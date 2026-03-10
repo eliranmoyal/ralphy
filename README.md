@@ -74,6 +74,14 @@ boundaries:
   never_touch:
     - "src/legacy/**"
     - "*.lock"
+
+# Optional: Jira (when using --jira)
+jira:
+  host: "mycompany.atlassian.net"
+  email: "you@company.com"
+  fromStatus: "In Progress"   # status to fetch issues from
+  toTransition: "Done"        # transition when marking complete
+  toStatus: "Done"           # optional: status for counting completed (defaults to toTransition)
 ```
 
 Rules apply to all tasks (single or PRD).
@@ -180,6 +188,17 @@ Titles must be unique.
 ralphy --github owner/repo
 ralphy --github owner/repo --github-label "ready"
 ```
+
+**Jira**:
+```bash
+ralphy --jira PROJ                           # fetch "In Progress" issues from project
+ralphy --jira PROJ --jira-label "ready"       # filter by label
+ralphy --jira-ticket PROJ-123                 # run a specific ticket
+```
+
+Requires `JIRA_HOST`, `JIRA_EMAIL`, and `JIRA_TOKEN` (Atlassian API token) environment variables. Config can override host/email via `.ralphy/config.yaml` (see Project Config).
+
+Fetches issue description and comments. On completion, transitions the issue to "Done" (or custom `toTransition` from config).
 
 ## Parallel Execution
 
@@ -300,6 +319,9 @@ ralphy --parallel --sandbox
 | `--json FILE` | JSON task file |
 | `--github REPO` | use GitHub issues |
 | `--github-label TAG` | filter issues by label |
+| `--jira PROJECT` | fetch tasks from Jira project (e.g., PROJ) |
+| `--jira-label TAG` | filter Jira issues by label |
+| `--jira-ticket KEY` | run a specific Jira ticket (e.g., PROJ-123) |
 | `--sync-issue N` | sync PRD progress to GitHub issue #N |
 | `--model NAME` | override model for any engine |
 | `--sonnet` | shortcut for `--claude --model sonnet` |
@@ -342,6 +364,7 @@ ralphy --parallel --sandbox
 **Both versions:**
 - `gh` (optional, for GitHub issues / `--create-pr`)
 - [agent-browser](https://agent-browser.dev) (optional, for `--browser`)
+- Jira: `JIRA_HOST`, `JIRA_EMAIL`, `JIRA_TOKEN` (optional, for `--jira`)
 
 ## Engine Details
 

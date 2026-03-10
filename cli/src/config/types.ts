@@ -45,6 +45,12 @@ export const BoundariesSchema = z.object({
 export const JiraSchema = z.object({
 	host: z.string().default(""),
 	email: z.string().default(""),
+	/** Status to fetch issues from (e.g. "In Progress"). Default: "In Progress" */
+	fromStatus: z.string().default("In Progress"),
+	/** Transition name when marking complete (e.g. "Done"). Default: "Done" */
+	toTransition: z.string().default("Done"),
+	/** Status name for counting completed issues. Defaults to toTransition if not set */
+	toStatus: z.string().optional(),
 });
 
 /**

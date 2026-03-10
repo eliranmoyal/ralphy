@@ -79,7 +79,13 @@ export async function runLoop(options: RuntimeOptions): Promise<void> {
 		jiraProject: options.jiraProject,
 		jiraTicket: options.jiraTicket,
 		jiraConfig: config?.jira
-			? { host: config.jira.host || undefined, email: config.jira.email || undefined }
+			? {
+					host: config.jira.host || undefined,
+					email: config.jira.email || undefined,
+					fromStatus: config.jira.fromStatus || undefined,
+					toTransition: config.jira.toTransition || undefined,
+					toStatus: config.jira.toStatus || undefined,
+				}
 			: undefined,
 	});
 	const taskSource = new CachedTaskSource(innerTaskSource);

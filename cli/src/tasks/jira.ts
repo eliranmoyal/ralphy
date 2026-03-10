@@ -15,6 +15,12 @@ const CACHE_TTL_MS = 30_000;
 export interface JiraConfig {
 	host?: string;
 	email?: string;
+	/** Status to fetch issues from (default: "In Progress") */
+	fromStatus?: string;
+	/** Transition name when marking complete (default: "Done") */
+	toTransition?: string;
+	/** Status name for counting completed (defaults to toTransition) */
+	toStatus?: string;
 }
 
 /**
@@ -33,6 +39,9 @@ export class JiraTaskSource implements TaskSource {
 	private auth: string;
 	private project: string;
 	private label?: string;
+	private fromStatus: string;
+	private toTransition: string;
+	private toStatus: string;
 	private cache: JiraCache | null = null;
 
 	constructor(project: string, label?: string, config?: JiraConfig) {
@@ -58,6 +67,9 @@ export class JiraTaskSource implements TaskSource {
 		this.auth = Buffer.from(`${email}:${token}`).toString("base64");
 		this.project = project;
 		this.label = label;
+		this.fromStatus = config?.fromStatus ?? "In Progress";
+		this.toTransition = config?.toTransition ?? "Done";
+		this.toStatus = config?.toStatus ?? this.toTransition;
 	}
 
 	private get baseUrl(): string {
@@ -103,7 +115,7 @@ export class JiraTaskSource implements TaskSource {
 	 * Build JQL query for fetching in-progress issues
 	 */
 	private buildJql(): string {
-		const parts = [`project = "${this.project}"`, `status = "In Progress"`];
+		const parts = [`project = "${this.project}"`, `status = "${this.fromStatus}"`];
 		if (this.label) {
 			parts.push(`labels = "${this.label}"`);
 		}
@@ -155,24 +167,23 @@ export class JiraTaskSource implements TaskSource {
 			throw new Error(`Invalid Jira issue ID: ${id}`);
 		}
 
-		// Find the "Done" transition
 		const transitions = await this.request<JiraTransitionsResponse>(
 			`/issue/${issueKey}/transitions`,
 		);
 
-		const doneTransition = transitions.transitions.find(
-			(t) => t.name.toLowerCase() === "done",
+		const targetTransition = transitions.transitions.find(
+			(t) => t.name.toLowerCase() === this.toTransition.toLowerCase(),
 		);
 
-		if (!doneTransition) {
+		if (!targetTransition) {
 			throw new Error(
-				`No "Done" transition found for ${issueKey}. Available: ${transitions.transitions.map((t) => t.name).join(", ")}`,
+				`No "${this.toTransition}" transition found for ${issueKey}. Available: ${transitions.transitions.map((t) => t.name).join(", ")}`,
 			);
 		}
 
 		await this.request(`/issue/${issueKey}/transitions`, {
 			method: "POST",
-			body: JSON.stringify({ transition: { id: doneTransition.id } }),
+			body: JSON.stringify({ transition: { id: targetTransition.id } }),
 		});
 
 		this.invalidateCache();
@@ -188,7 +199,7 @@ export class JiraTaskSource implements TaskSource {
 			return this.cache.doneCount;
 		}
 
-		const jql = `project = "${this.project}" AND status = "Done"${this.label ? ` AND labels = "${this.label}"` : ""} ORDER BY created ASC`;
+		const jql = `project = "${this.project}" AND status = "${this.toStatus}"${this.label ? ` AND labels = "${this.label}"` : ""} ORDER BY created ASC`;
 		const data = await this.request<JiraSearchResponse>(
 			`/search?jql=${encodeURIComponent(jql)}&fields=summary&maxResults=0`,
 		);
@@ -223,6 +234,7 @@ export class JiraTicketTaskSource implements TaskSource {
 	private host: string;
 	private auth: string;
 	private ticketKey: string;
+	private toTransition: string;
 	private completed = false;
 
 	constructor(ticketKey: string, config?: JiraConfig) {
@@ -247,6 +259,7 @@ export class JiraTicketTaskSource implements TaskSource {
 		this.host = host.replace(/\/$/, "");
 		this.auth = Buffer.from(`${email}:${token}`).toString("base64");
 		this.ticketKey = ticketKey.toUpperCase();
+		this.toTransition = config?.toTransition ?? "Done";
 	}
 
 	private get baseUrl(): string {
@@ -304,24 +317,23 @@ export class JiraTicketTaskSource implements TaskSource {
 			throw new Error(`Invalid Jira issue ID: ${id}`);
 		}
 
-		// Transition to "Done"
 		const transitions = await this.request<JiraTransitionsResponse>(
 			`/issue/${issueKey}/transitions`,
 		);
 
-		const doneTransition = transitions.transitions.find(
-			(t) => t.name.toLowerCase() === "done",
+		const targetTransition = transitions.transitions.find(
+			(t) => t.name.toLowerCase() === this.toTransition.toLowerCase(),
 		);
 
-		if (!doneTransition) {
+		if (!targetTransition) {
 			throw new Error(
-				`No "Done" transition found for ${issueKey}. Available: ${transitions.transitions.map((t) => t.name).join(", ")}`,
+				`No "${this.toTransition}" transition found for ${issueKey}. Available: ${transitions.transitions.map((t) => t.name).join(", ")}`,
 			);
 		}
 
 		await this.request(`/issue/${issueKey}/transitions`, {
 			method: "POST",
-			body: JSON.stringify({ transition: { id: doneTransition.id } }),
+			body: JSON.stringify({ transition: { id: targetTransition.id } }),
 		});
 
 		this.completed = true;
