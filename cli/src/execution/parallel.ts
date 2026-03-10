@@ -2,6 +2,7 @@ import { copyFileSync, cpSync, existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import simpleGit from "simple-git";
 import { PROGRESS_FILE, RALPHY_DIR } from "../config/loader.ts";
+import { writeTaskLog } from "../config/log-writer.ts";
 import { logTaskProgress } from "../config/writer.ts";
 import type { AIEngine, AIResult } from "../engines/types.ts";
 import { getCurrentBranch, returnToBaseBranch } from "../git/branch.ts";
@@ -61,6 +62,7 @@ async function runAgentInWorktree(
 	browserEnabled: "auto" | "true" | "false",
 	modelOverride?: string,
 	engineArgs?: string[],
+	log?: boolean,
 ): Promise<ParallelAgentResult> {
 	let worktreeDir = "";
 	let branchName = "";
@@ -126,6 +128,19 @@ async function runAgentInWorktree(
 			{ maxRetries, retryDelay },
 		);
 
+		if (log && result) {
+			await writeTaskLog({
+				task: task.title,
+				prompt,
+				response: result.response,
+				success: result.success,
+				error: result.error,
+				inputTokens: result.inputTokens,
+				outputTokens: result.outputTokens,
+				workDir: originalDir,
+			});
+		}
+
 		return { task, agentNum, worktreeDir, branchName, result };
 	} catch (error) {
 		const errorMsg = error instanceof Error ? error.message : String(error);
@@ -155,6 +170,7 @@ async function runAgentInSandbox(
 	browserEnabled: "auto" | "true" | "false",
 	modelOverride?: string,
 	engineArgs?: string[],
+	log?: boolean,
 ): Promise<ParallelAgentResult> {
 	const uniqueSuffix = Math.random().toString(36).substring(2, 8);
 	const sandboxDir = join(sandboxBase, `agent-${agentNum}-${uniqueSuffix}`);
@@ -220,6 +236,19 @@ async function runAgentInSandbox(
 			{ maxRetries, retryDelay },
 		);
 
+		if (log && result) {
+			await writeTaskLog({
+				task: task.title,
+				prompt,
+				response: result.response,
+				success: result.success,
+				error: result.error,
+				inputTokens: result.inputTokens,
+				outputTokens: result.outputTokens,
+				workDir: originalDir,
+			});
+		}
+
 		return { task, agentNum, worktreeDir: sandboxDir, branchName, result, usedSandbox: true };
 	} catch (error) {
 		const errorMsg = error instanceof Error ? error.message : String(error);
@@ -267,6 +296,7 @@ export async function runParallel(
 		useSandbox = false,
 		engineArgs,
 		syncIssue,
+		log,
 	} = options;
 
 	const shouldFallbackToSandbox = (error: string | undefined): boolean => {
@@ -399,6 +429,7 @@ export async function runParallel(
 					browserEnabled,
 					modelOverride,
 					engineArgs,
+					log,
 				);
 
 			if (effectiveUseSandbox) {
@@ -422,6 +453,7 @@ export async function runParallel(
 				browserEnabled,
 				modelOverride,
 				engineArgs,
+				log,
 			).then((res) => {
 				if (shouldFallbackToSandbox(res.error)) {
 					logWarn(`Agent ${globalAgentNum}: Worktree unavailable, retrying in sandbox mode.`);

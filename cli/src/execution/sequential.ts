@@ -1,3 +1,4 @@
+import { writeTaskLog } from "../config/log-writer.ts";
 import { logTaskProgress } from "../config/writer.ts";
 import type { AIEngine, AIResult } from "../engines/types.ts";
 import { createTaskBranch, returnToBaseBranch } from "../git/branch.ts";
@@ -40,6 +41,8 @@ export interface ExecutionOptions {
 	engineArgs?: string[];
 	/** GitHub issue number to sync PRD with on each iteration */
 	syncIssue?: number;
+	/** Save prompts and AI responses to .ralphy/logs/ */
+	log?: boolean;
 }
 
 export interface ExecutionResult {
@@ -73,6 +76,7 @@ export async function runSequential(options: ExecutionOptions): Promise<Executio
 		modelOverride,
 		engineArgs,
 		syncIssue,
+		log,
 	} = options;
 
 	const result: ExecutionResult = {
@@ -174,6 +178,18 @@ export async function runSequential(options: ExecutionOptions): Promise<Executio
 					spinner.success(undefined, true); // Show timing breakdown
 					result.totalInputTokens += aiResult.inputTokens;
 					result.totalOutputTokens += aiResult.outputTokens;
+
+					if (log) {
+						await writeTaskLog({
+							task: task.title,
+							prompt,
+							response: aiResult.response,
+							success: true,
+							inputTokens: aiResult.inputTokens,
+							outputTokens: aiResult.outputTokens,
+							workDir,
+						});
+					}
 
 					// Mark task complete
 					await taskSource.markComplete(task.id);

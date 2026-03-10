@@ -1,5 +1,6 @@
 import { loadConfig } from "../../config/loader.ts";
 import type { RuntimeOptions } from "../../config/types.ts";
+import { writeTaskLog } from "../../config/log-writer.ts";
 import { logTaskProgress } from "../../config/writer.ts";
 import { createEngine, isEngineAvailable } from "../../engines/index.ts";
 import type { AIEngineName } from "../../engines/types.ts";
@@ -106,6 +107,18 @@ export async function runTask(task: string, options: RuntimeOptions): Promise<vo
 			const tokens = formatTokens(result.inputTokens, result.outputTokens);
 			spinner.success(`Done ${tokens}`);
 
+			if (options.log) {
+				await writeTaskLog({
+					task,
+					prompt,
+					response: result.response,
+					success: true,
+					inputTokens: result.inputTokens,
+					outputTokens: result.outputTokens,
+					workDir,
+				});
+			}
+
 			logTaskProgress(task, "completed", workDir);
 			await sendNotifications(config, "completed", {
 				tasksCompleted: 1,
@@ -123,6 +136,20 @@ export async function runTask(task: string, options: RuntimeOptions): Promise<vo
 			}
 		} else {
 			spinner.error(result.error || "Unknown error");
+
+			if (options.log) {
+				await writeTaskLog({
+					task,
+					prompt,
+					response: result.response,
+					success: false,
+					error: result.error,
+					inputTokens: result.inputTokens,
+					outputTokens: result.outputTokens,
+					workDir,
+				});
+			}
+
 			logTaskProgress(task, "failed", workDir);
 			await sendNotifications(config, "failed", {
 				tasksCompleted: 0,
