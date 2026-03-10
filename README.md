@@ -282,6 +282,23 @@ notifications:
 
 Notifications include task completion counts and status (completed/failed).
 
+## Logs
+
+Save prompts and AI responses to `.ralphy/logs/` for debugging, auditing, or replay:
+
+```bash
+ralphy --log
+ralphy --log --prd PRD.md
+```
+
+Each task creates a markdown file with:
+- Task title and status (completed/failed)
+- Timestamp and token usage (when available)
+- Full prompt sent to the AI
+- Full response received
+
+Files are named `{timestamp}-{task-slug}.md` (e.g., `2025-03-10T12-30-45-add-login-button.md`).
+
 ## Sandbox Mode
 
 For large repos with big dependency directories, sandbox mode is faster than git worktrees:
@@ -341,6 +358,7 @@ ralphy --parallel --sandbox
 | `--max-retries N` | retries per task (default: 3) |
 | `--retry-delay N` | seconds between retries |
 | `--dry-run` | preview only |
+| `--log` | save prompts and AI responses to .ralphy/logs/ |
 | `--browser` | enable browser automation |
 | `--no-browser` | disable browser automation |
 | `-v, --verbose` | debug output |
