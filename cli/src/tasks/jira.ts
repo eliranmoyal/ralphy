@@ -121,13 +121,13 @@ export class JiraTaskSource implements TaskSource {
 
 		const jql = this.buildJql();
 		const data = await this.request<JiraSearchResponse>(
-			`/search?jql=${encodeURIComponent(jql)}&fields=summary,description,status`,
+			`/search?jql=${encodeURIComponent(jql)}&fields=summary,description,status,comment`,
 		);
 
 		const tasks = data.issues.map((issue) => ({
 			id: `${issue.key}:${issue.fields.summary}`,
 			title: `[${issue.key}] ${issue.fields.summary}`,
-			body: extractDescription(issue.fields.description),
+			body: buildTaskBody(issue.fields.description, issue.fields.comment),
 			completed: false,
 		}));
 
@@ -208,8 +208,10 @@ export class JiraTaskSource implements TaskSource {
 		const issueKey = id.split(":")[0];
 		if (!issueKey) return "";
 
-		const issue = await this.request<JiraIssue>(`/issue/${issueKey}?fields=description`);
-		return extractDescription(issue.fields.description);
+		const issue = await this.request<JiraIssue>(
+			`/issue/${issueKey}?fields=description,comment`,
+		);
+		return buildTaskBody(issue.fields.description, issue.fields.comment);
 	}
 }
 
@@ -278,14 +280,14 @@ export class JiraTicketTaskSource implements TaskSource {
 		if (this.completed) return [];
 
 		const issue = await this.request<JiraIssue>(
-			`/issue/${this.ticketKey}?fields=summary,description`,
+			`/issue/${this.ticketKey}?fields=summary,description,comment`,
 		);
 
 		return [
 			{
 				id: `${issue.key}:${issue.fields.summary}`,
 				title: `[${issue.key}] ${issue.fields.summary}`,
-				body: extractDescription(issue.fields.description),
+				body: buildTaskBody(issue.fields.description, issue.fields.comment),
 				completed: false,
 			},
 		];
@@ -347,7 +349,16 @@ interface JiraIssue {
 		summary: string;
 		description: JiraDocument | null;
 		status?: { name: string };
+		comment?: JiraCommentField;
 	};
+}
+
+interface JiraCommentField {
+	comments: Array<{
+		author: { displayName: string };
+		body: JiraDocument | null;
+		created: string;
+	}>;
 }
 
 interface JiraDocument {
@@ -368,6 +379,19 @@ interface JiraTransitionsResponse {
 interface JiraTransition {
 	id: string;
 	name: string;
+}
+
+/**
+ * Build task body from description and comments
+ */
+function buildTaskBody(
+	description: JiraDocument | null,
+	commentField?: JiraCommentField,
+): string {
+	const desc = extractDescription(description);
+	const comments = extractComments(commentField);
+	if (!comments) return desc;
+	return desc ? `${desc}\n\n---\n\n${comments}` : comments;
 }
 
 /**
@@ -393,4 +417,22 @@ function extractDescription(doc: JiraDocument | null): string {
 		})
 		.filter(Boolean)
 		.join("\n");
+}
+
+/**
+ * Extract comments as formatted plain text
+ */
+function extractComments(commentField?: JiraCommentField): string {
+	if (!commentField?.comments?.length) return "";
+
+	return commentField.comments
+		.map((c) => {
+			const text = extractDescription(c.body);
+			if (!text) return "";
+			const author = c.author?.displayName ?? "Unknown";
+			const date = c.created ? new Date(c.created).toISOString().slice(0, 10) : "";
+			return `**${author}** (${date}):\n${text}`;
+		})
+		.filter(Boolean)
+		.join("\n\n");
 }
