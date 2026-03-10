@@ -53,7 +53,10 @@ export function createProgram(): Command {
 		.option("--jira <project>", "Jira project key for issues (e.g., PROJ)")
 		.option("--jira-label <label>", "Filter Jira issues by label")
 		.option("--jira-ticket <key>", "Run a specific Jira ticket (e.g., PROJ-123)")
-		.option("--jira-subtasks", "With --jira-ticket: run subtasks of the parent instead of the ticket itself")
+		.option(
+			"--jira-subtasks",
+			"With --jira-ticket: run subtasks of the parent instead of the ticket itself",
+		)
 		.option("--no-commit", "Don't auto-commit changes")
 		.option("--browser", "Enable browser automation (agent-browser)")
 		.option("--no-browser", "Disable browser automation")
@@ -108,8 +111,7 @@ export function parseArgs(args: string[]): {
 	const modelOverride = opts.sonnet ? "sonnet" : opts.model || undefined;
 
 	// Determine PRD source with auto-detection for file vs folder
-	let prdSource: "markdown" | "markdown-folder" | "yaml" | "json" | "github" | "jira" =
-		"markdown";
+	let prdSource: "markdown" | "markdown-folder" | "yaml" | "json" | "github" | "jira" = "markdown";
 	let prdFile = opts.prd || "PRD.md";
 	let prdIsFolder = false;
 

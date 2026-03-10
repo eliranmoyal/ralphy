@@ -51,7 +51,9 @@ export async function writeTaskLog(options: {
 
 	const status = success ? "completed" : "failed";
 	const tokens =
-		inputTokens || outputTokens ? `\nTokens: ${inputTokens ?? 0} in / ${outputTokens ?? 0} out` : "";
+		inputTokens || outputTokens
+			? `\nTokens: ${inputTokens ?? 0} in / ${outputTokens ?? 0} out`
+			: "";
 
 	const content = `# Task: ${task}
 

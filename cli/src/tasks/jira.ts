@@ -124,8 +124,7 @@ export class JiraTaskSource implements TaskSource {
 		if (this.label) {
 			parts.push(`labels = "${this.label}"`);
 		}
-		parts.push("ORDER BY created ASC");
-		return parts.join(" AND ");
+		return `${parts.join(" AND ")} ORDER BY created ASC`;
 	}
 
 	/**
@@ -138,7 +137,7 @@ export class JiraTaskSource implements TaskSource {
 
 		const jql = this.buildJql();
 		const data = await this.request<JiraSearchResponse>(
-			`/search?jql=${encodeURIComponent(jql)}&fields=summary,description,status,comment`,
+			`/search/jql?jql=${encodeURIComponent(jql)}&fields=summary,description,status,comment`,
 		);
 
 		const tasks = data.issues.map((issue) => ({
@@ -206,7 +205,7 @@ export class JiraTaskSource implements TaskSource {
 
 		const jql = `project = "${this.project}" AND status = "${this.toStatus}"${this.label ? ` AND labels = "${this.label}"` : ""} ORDER BY created ASC`;
 		const data = await this.request<JiraSearchResponse>(
-			`/search?jql=${encodeURIComponent(jql)}&fields=summary&maxResults=0`,
+			`/search/jql?jql=${encodeURIComponent(jql)}&fields=summary&maxResults=0`,
 		);
 
 		const doneCount = data.total;
@@ -224,9 +223,7 @@ export class JiraTaskSource implements TaskSource {
 		const issueKey = id.split(":")[0];
 		if (!issueKey) return "";
 
-		const issue = await this.request<JiraIssue>(
-			`/issue/${issueKey}?fields=description,comment`,
-		);
+		const issue = await this.request<JiraIssue>(`/issue/${issueKey}?fields=description,comment`);
 		return buildTaskBody(issue.fields.description, issue.fields.comment);
 	}
 }
@@ -305,7 +302,7 @@ export class JiraSubtasksTaskSource implements TaskSource {
 
 		const jql = `parent = "${this.parentKey}" AND status != "${this.toStatus}" ORDER BY created ASC`;
 		const data = await this.request<JiraSearchResponse>(
-			`/search?jql=${encodeURIComponent(jql)}&fields=summary,description,status,comment`,
+			`/search/jql?jql=${encodeURIComponent(jql)}&fields=summary,description,status,comment`,
 		);
 
 		const tasks = data.issues.map((issue) => ({
@@ -364,7 +361,7 @@ export class JiraSubtasksTaskSource implements TaskSource {
 	async countCompleted(): Promise<number> {
 		const jql = `parent = "${this.parentKey}" AND status = "${this.toStatus}"`;
 		const data = await this.request<JiraSearchResponse>(
-			`/search?jql=${encodeURIComponent(jql)}&fields=summary&maxResults=0`,
+			`/search/jql?jql=${encodeURIComponent(jql)}&fields=summary&maxResults=0`,
 		);
 		return data.total;
 	}
@@ -549,10 +546,7 @@ interface JiraTransition {
 /**
  * Build task body from description and comments
  */
-function buildTaskBody(
-	description: JiraDocument | null,
-	commentField?: JiraCommentField,
-): string {
+function buildTaskBody(description: JiraDocument | null, commentField?: JiraCommentField): string {
 	const desc = extractDescription(description);
 	const comments = extractComments(commentField);
 	if (!comments) return desc;
