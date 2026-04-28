@@ -110,6 +110,10 @@ export class CachedTaskSource implements TaskSource {
 		return tasks.filter((t) => !this.pendingCompletions.has(t.id));
 	}
 
+	getTaskUrl(id: string): string | undefined {
+		return this.inner.getTaskUrl?.(id);
+	}
+
 	/**
 	 * Get the parallel group of a task (YAML or JSON sources)
 	 */

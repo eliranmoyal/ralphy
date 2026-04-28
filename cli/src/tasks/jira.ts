@@ -226,6 +226,11 @@ export class JiraTaskSource implements TaskSource {
 		const issue = await this.request<JiraIssue>(`/issue/${issueKey}?fields=description,comment`);
 		return buildTaskBody(issue.fields.description, issue.fields.comment);
 	}
+
+	getTaskUrl(id: string): string | undefined {
+		const issueKey = id.split(":")[0];
+		return issueKey ? `https://${this.host}/browse/${issueKey}` : undefined;
+	}
 }
 
 /**
@@ -369,6 +374,11 @@ export class JiraSubtasksTaskSource implements TaskSource {
 	private invalidateCache(): void {
 		this.cache = null;
 	}
+
+	getTaskUrl(id: string): string | undefined {
+		const issueKey = id.split(":")[0];
+		return issueKey ? `https://${this.host}/browse/${issueKey}` : undefined;
+	}
 }
 
 /**
@@ -495,6 +505,11 @@ export class JiraTicketTaskSource implements TaskSource {
 
 	async countCompleted(): Promise<number> {
 		return this.completed ? 1 : 0;
+	}
+
+	getTaskUrl(id: string): string | undefined {
+		const issueKey = id.split(":")[0];
+		return issueKey ? `https://${this.host}/browse/${issueKey}` : undefined;
 	}
 }
 

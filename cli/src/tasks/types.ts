@@ -37,4 +37,6 @@ export interface TaskSource {
 	countCompleted(): Promise<number>;
 	/** Get tasks in a specific parallel group */
 	getTasksInGroup?(group: number): Promise<Task[]>;
+	/** Get URL for a task (e.g. Jira ticket link). Returns undefined if not applicable. */
+	getTaskUrl?(id: string): string | undefined;
 }

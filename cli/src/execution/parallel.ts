@@ -309,6 +309,7 @@ export async function runParallel(
 		tasksFailed: 0,
 		totalInputTokens: 0,
 		totalOutputTokens: 0,
+		completedTaskIds: [],
 	};
 
 	// Determine isolation mode (worktree vs sandbox)
@@ -552,6 +553,7 @@ export async function runParallel(
 				await taskSource.markComplete(task.id);
 				logTaskProgress(task.title, "completed", workDir);
 				result.tasksCompleted++;
+				result.completedTaskIds!.push(task.id);
 
 				notifyTaskComplete(task.title);
 				clearDeferredTask(taskSource.type, task, workDir, prdFile);

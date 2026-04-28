@@ -50,6 +50,8 @@ export interface ExecutionResult {
 	tasksFailed: number;
 	totalInputTokens: number;
 	totalOutputTokens: number;
+	/** IDs of successfully completed tasks (for notifications, e.g. Jira links) */
+	completedTaskIds?: string[];
 }
 
 /**
@@ -84,6 +86,7 @@ export async function runSequential(options: ExecutionOptions): Promise<Executio
 		tasksFailed: 0,
 		totalInputTokens: 0,
 		totalOutputTokens: 0,
+		completedTaskIds: [],
 	};
 
 	let iteration = 0;
@@ -195,6 +198,7 @@ export async function runSequential(options: ExecutionOptions): Promise<Executio
 					await taskSource.markComplete(task.id);
 					logTaskProgress(task.title, "completed", workDir);
 					result.tasksCompleted++;
+					result.completedTaskIds!.push(task.id);
 
 					// Sync PRD to GitHub issue if configured
 					if (syncIssue && options.prdFile) {

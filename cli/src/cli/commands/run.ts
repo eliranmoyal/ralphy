@@ -204,9 +204,23 @@ export async function runLoop(options: RuntimeOptions): Promise<void> {
 
 	// Send webhook notifications
 	const status = result.tasksFailed > 0 ? "failed" : "completed";
+	const completedTaskLinks =
+		result.completedTaskIds?.length && taskSource.getTaskUrl
+			? result.completedTaskIds
+					.map((id) => {
+						const url = taskSource.getTaskUrl!(id);
+						if (!url) return null;
+						const [key, ...summaryParts] = id.split(":");
+						const title = key ? `[${key}] ${summaryParts.join(":").trim() || key}` : id;
+						return { title, url };
+					})
+					.filter((l): l is { title: string; url: string } => l !== null)
+			: undefined;
+
 	await sendNotifications(config, status, {
 		tasksCompleted: result.tasksCompleted,
 		tasksFailed: result.tasksFailed,
+		completedTaskLinks,
 	});
 
 	if (result.tasksCompleted > 0) {

@@ -6,6 +6,7 @@ type SessionStatus = "completed" | "failed";
 interface NotificationResult {
 	tasksCompleted: number;
 	tasksFailed: number;
+	completedTaskLinks?: Array<{ title: string; url: string }>;
 }
 
 function buildMessage(status: SessionStatus, result?: NotificationResult): string {
@@ -14,10 +15,15 @@ function buildMessage(status: SessionStatus, result?: NotificationResult): strin
 	}
 
 	const total = result.tasksCompleted + result.tasksFailed;
-	if (status === "completed") {
-		return `Ralphy session completed: ${result.tasksCompleted}/${total} tasks succeeded`;
+	let msg =
+		status === "completed"
+			? `Ralphy session completed: ${result.tasksCompleted}/${total} tasks succeeded`
+			: `Ralphy session failed: ${result.tasksCompleted}/${total} tasks succeeded, ${result.tasksFailed} failed`;
+
+	if (result.completedTaskLinks?.length) {
+		msg += "\n\n" + result.completedTaskLinks.map((l) => `${l.title}: ${l.url}`).join("\n");
 	}
-	return `Ralphy session failed: ${result.tasksCompleted}/${total} tasks succeeded, ${result.tasksFailed} failed`;
+	return msg;
 }
 
 /**
@@ -31,11 +37,16 @@ async function sendDiscordNotification(
 	const isSuccess = status === "completed";
 	const total = result ? result.tasksCompleted + result.tasksFailed : 0;
 
+	let description = result
+		? `${result.tasksCompleted}/${total} tasks succeeded${result.tasksFailed > 0 ? `, ${result.tasksFailed} failed` : ""}`
+		: `Session ${status}`;
+	if (result?.completedTaskLinks?.length) {
+		description += "\n\n**Tickets:**\n" + result.completedTaskLinks.map((l) => `• [${l.title}](${l.url})`).join("\n");
+	}
+
 	const embed = {
 		title: isSuccess ? "Session Completed" : "Session Failed",
-		description: result
-			? `${result.tasksCompleted}/${total} tasks succeeded${result.tasksFailed > 0 ? `, ${result.tasksFailed} failed` : ""}`
-			: `Session ${status}`,
+		description,
 		color: isSuccess ? 0x22c55e : 0xef4444,
 		footer: {
 			text: "Ralphy",
@@ -96,6 +107,7 @@ async function sendCustomNotification(
 			message,
 			tasks_completed: result?.tasksCompleted ?? 0,
 			tasks_failed: result?.tasksFailed ?? 0,
+			completed_task_links: result?.completedTaskLinks ?? [],
 		}),
 	});
 
