@@ -28,6 +28,16 @@ cd ralphy && chmod +x ralphy.sh
 ./ralphy.sh --prd PRD.md
 ```
 
+**Option C: Install globally from Eliran's fork**
+```bash
+git clone https://github.com/eliranmoyal/ralphy.git
+cd ralphy/cli && npm install -g .
+
+# Then use anywhere
+ralphy "add login button"
+ralphy --prd PRD.md
+```
+
 Both versions have identical features. Examples below use `ralphy` (npm) - substitute `./ralphy.sh` if using the bash script.
 
 ## Two Modes
