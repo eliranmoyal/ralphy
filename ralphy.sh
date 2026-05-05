@@ -1617,6 +1617,11 @@ $issue_body
       ;;
   esac
 
+  if [[ "$PRD_SOURCE" == "markdown" ]] || [[ "$PRD_SOURCE" == "yaml" ]]; then
+    prompt="$prompt
+If you need more context, you can read the project overview file: ${PRD_FILE}."
+  fi
+
   prompt="$prompt
 1. Find the highest-priority incomplete task and implement it."
 
